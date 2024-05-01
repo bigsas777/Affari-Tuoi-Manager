@@ -1,26 +1,41 @@
-from tkinter import Button, Entry, Frame, Label, PanedWindow, Tk, messagebox, ttk
+from tkinter import Button, Entry, Frame, Label, PanedWindow, PhotoImage, Tk, messagebox, ttk
+import pandas as pd
+from datetime import date
+
+# --- Global variables ---
+
+today = date.today()
+today_str = today.strftime("%d/%m/%y")
+
+df_partite_affari_tuoi = pd.read_parquet('dataset_affari_tuoi.parquet')
+tonight_serie = pd.Series()
+list_cmb_pacchi = []
 
 POSSIBLE_PRIZES = ["0", "1", "5", "10", "20", "50", "75", "100", "200", "500", "5.000", "10.000", "15.000", "20.000", "30.000", 
                     "50.000", "75.000", "100.000", "200.000", "300.000"]
+
+# Public widgets
 root = Tk()
 frame_panel = Frame(root)
 
 def main():
-    root.title("Affari Tuoi Manager")
+    root.title(f"Affari Tuoi Manager - {today_str}")
+    img = PhotoImage(file='amadeus.png')
+    root.iconphoto(False, img)
     root.geometry("800x600")
 
     # Menu bottoni schermate
     paned_buttons = PanedWindow(root, orient="horizontal")
 
-    btn_inserimento = Button(paned_buttons, text="Inserimento", command=(lambda: build_panel("ins")))
+    btn_inserimento = Button(paned_buttons, text="Inserimento📥", command=(lambda: build_panel("ins")))
     btn_inserimento.pack(side="left")
     paned_buttons.add(btn_inserimento)
 
-    btn_classifica = Button(paned_buttons, text="Classifica", command=(lambda: build_panel("clas")))
+    btn_classifica = Button(paned_buttons, text="Classifica📊", command=(lambda: build_panel("clas")))
     btn_classifica.pack(side="left")
     paned_buttons.add(btn_classifica)
 
-    btn_impostazioni = Button(paned_buttons, text="Impostazioni", command=(lambda: build_panel("imp")))
+    btn_impostazioni = Button(paned_buttons, text="Impostazioni⚙️", command=(lambda: build_panel("imp")))
     btn_impostazioni.pack(side="left")
     paned_buttons.add(btn_impostazioni)
 
@@ -67,7 +82,7 @@ def build_panel_classifica():
 
     frm_classifica.pack(side="top")
 
-def build_panel_inserimento(): # TODO riabilitare i command e postcommand di button e combobox
+def build_panel_inserimento(): # TODO riabilitare i command di button
     frm_inserimento = Frame(frame_panel, pady=30)
     lbl_input_pacchi = Label(frm_inserimento, text="Inserimento pacchi", font=("TkDefaultFont", 19))
     lbl_input_pacchi.grid(row=0, column=0)
@@ -78,9 +93,9 @@ def build_panel_inserimento(): # TODO riabilitare i command e postcommand di but
             frm_pacco = Frame(frm_inserimento)
             lbl_pacco = Label(frm_pacco, text=str(count))
 
-            cmb_pacco = ttk.Combobox(frm_pacco, state='readonly') # , postcommand=update_available_pacchi
+            cmb_pacco = ttk.Combobox(frm_pacco, state='readonly', postcommand=update_available_pacchi)
             cmb_pacco['values'] = POSSIBLE_PRIZES
-            # list_cmb_pacchi.append(cmb_pacco)
+            list_cmb_pacchi.append(cmb_pacco)
 
             lbl_pacco.grid(row=0, column=0)
             cmb_pacco.grid(row=0, column=1)
@@ -106,6 +121,23 @@ def build_panel_inserimento(): # TODO riabilitare i command e postcommand di but
     btn_confirm_pacchi.grid(row=14, column=1, pady=10)
 
     frm_inserimento.pack(side="top")
+
+def update_available_pacchi():
+    i = 0
+    selected_prizes = []
+    for cmb in list_cmb_pacchi:
+        selected_prizes.insert(i, cmb.get())
+        i += 1
+
+    for cmb in list_cmb_pacchi:
+        cmb["values"] = difference(POSSIBLE_PRIZES, selected_prizes)
+    
+def difference(l1, l2):
+    tmp = []
+    for element in l1:
+        if element not in l2:
+            tmp.append(element)
+    return tmp
 
 if __name__ == "__main__":
     main()
