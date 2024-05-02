@@ -1,26 +1,14 @@
 from tkinter import Button, Entry, Frame, Label, PanedWindow, PhotoImage, Tk, messagebox, ttk
 import pandas as pd
 from datetime import date
+from google.oauth2.service_account import Credentials
+import gspread
 
-# --- Global variables ---
 
-today = date.today()
-today_str = today.strftime("%d/%m/%y")
-
-df_partite_affari_tuoi = pd.read_parquet('dataset_affari_tuoi.parquet')
-tonight_serie = pd.Series()
-list_cmb_pacchi = []
-
-POSSIBLE_PRIZES = ["0", "1", "5", "10", "20", "50", "75", "100", "200", "500", "5.000", "10.000", "15.000", "20.000", "30.000", 
-                    "50.000", "75.000", "100.000", "200.000", "300.000"]
-
-# Public widgets
-root = Tk()
-frame_panel = Frame(root)
 
 def main():
     root.title(f"Affari Tuoi Manager - {today_str}")
-    img = PhotoImage(file='amadeus.png')
+    img = PhotoImage(file="amadeus.png")
     root.iconphoto(False, img)
     root.geometry("800x600")
 
@@ -93,8 +81,8 @@ def build_panel_inserimento(): # TODO riabilitare i command di button
             frm_pacco = Frame(frm_inserimento)
             lbl_pacco = Label(frm_pacco, text=str(count))
 
-            cmb_pacco = ttk.Combobox(frm_pacco, state='readonly', postcommand=update_available_pacchi)
-            cmb_pacco['values'] = POSSIBLE_PRIZES
+            cmb_pacco = ttk.Combobox(frm_pacco, state="readonly", postcommand=update_available_pacchi) # postcommand: eseguito prima che si generi la lista di opzioni
+            cmb_pacco["values"] = POSSIBLE_PRIZES
             list_cmb_pacchi.append(cmb_pacco)
 
             lbl_pacco.grid(row=0, column=0)
@@ -114,10 +102,10 @@ def build_panel_inserimento(): # TODO riabilitare i command di button
     frm_tipo_vincita.grid(row=13, column=0)
     lbl_tipo_vincita = Label(frm_tipo_vincita, text="Tipo vincita")
     lbl_tipo_vincita.grid(row=0, column=0)
-    cmb_tipo_vincita = ttk.Combobox(frm_tipo_vincita, values=["Regione fortunata", "Offerta", "Pacco"], state='readonly')
+    cmb_tipo_vincita = ttk.Combobox(frm_tipo_vincita, values=["Regione fortunata", "Offerta", "Pacco"], state="readonly")
     cmb_tipo_vincita.grid(row=0, column=1)
 
-    btn_confirm_pacchi = Button(frm_inserimento, text="Salva su Google Sheets") # , command=(lambda: confirmPacchi(entry_vincita, cmb_tipo_vincita))
+    btn_confirm_pacchi = Button(frm_inserimento, text="Salva in Parquet e Google Sheets", command=(lambda: confirm_pacchi(entry_vincita.get(), cmb_tipo_vincita.get())))
     btn_confirm_pacchi.grid(row=14, column=1, pady=10)
 
     frm_inserimento.pack(side="top")
@@ -139,5 +127,61 @@ def difference(l1, l2):
             tmp.append(element)
     return tmp
 
+def confirm_pacchi(vincita, tipo_vincita):
+    tonight_partita.clear()
+
+    tonight_partita.append(today_str)
+
+    for cmb_pacco in list_cmb_pacchi:
+        tonight_partita.append(pacco_to_int(cmb_pacco.get()))
+    
+    tonight_partita.append(int(vincita))
+    tonight_partita.append(tipo_vincita)
+
+    if messagebox.showwarning("Salvare la partita?", str_warning_salvataggio) == "ok":
+        # Aggiorna il dataframe
+        df_partite_affari_tuoi.loc[len(df_partite_affari_tuoi)] = tonight_partita
+        
+        try: # Salvataggio in locale
+            df_partite_affari_tuoi.to_parquet("dataset_affari_tuoi.parquet")
+        except:
+            messagebox.showerror("Errore", "Errore nel salvataggio in Parquet.")
+
+        
+        index_tonight_partita = df_partite_affari_tuoi.shape[0] + 1
+
+        try: # Salvataggio in cloud (Google Sheets)
+            sheet.update(range_name=f"A{index_tonight_partita}:W{index_tonight_partita}", values=[tonight_partita])
+        except:
+            messagebox.showerror("Errore", "Errore nell'invio dei dati a Google Sheets")
+
+def pacco_to_int(pacco: str):
+    return int(pacco.replace(".", ""))
+
 if __name__ == "__main__":
+    today = date.today()
+    today_str = today.strftime("%d/%m/%y")
+
+    str_warning_salvataggio = f"La partita del {today_str} verrà salvata in locale e su Google Sheets."
+
+    df_partite_affari_tuoi = pd.read_parquet("dataset_affari_tuoi.parquet")
+    tonight_partita = []
+    list_cmb_pacchi = []
+
+    POSSIBLE_PRIZES = ["0", "1", "5", "10", "20", "50", "75", "100", "200", "500", "5.000", "10.000", "15.000", "20.000", "30.000", 
+                        "50.000", "75.000", "100.000", "200.000", "300.000"]
+
+    # Spreadsheets API config
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets"
+    ]
+    creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
+    client = gspread.authorize(creds)
+    workbook = client.open_by_key("1kaKvRk6R95m9XySwtx_GQvxY2v3QQpTwTnWHPQveed8")
+    sheet = workbook.worksheet("Dati")
+
+    # Public widgets
+    root = Tk()
+    frame_panel = Frame(root)
+
     main()
