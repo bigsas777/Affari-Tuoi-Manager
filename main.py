@@ -67,32 +67,6 @@ def build_panel_impostazioni():
 
     frm_impostazioni.pack(side="top")
 
-def load_partita_from_file(file_format):
-    if file_format == "csv":
-        with open("saved_partita.csv", "r") as csv_data:
-            reader = csv.reader(csv_data, delimiter=",")
-            i = 0
-        for data in next(reader):
-            if i > 0 and i < 21:
-                list_cmb_pacchi[i].set(data) # Aggiorna combobox pacchi
-            elif i == 21:
-                entry_vincita.delete(0, END) # Aggiorna entry vincita
-                entry_vincita.insert(0, data)
-            elif i == 22:
-                cmb_tipo_vincita.set(data) # Aggiorna combobox tipo vincita
-
-            i += 1
-    else:
-        messagebox.showerror("Errore", "Tipo di file sconosciuto")
-
-def save_partita_to_file(file_format):
-    if file_format == "csv":
-        with open("saved_partita.csv", "w", newline="") as csv_data:
-            writer = csv.writer(csv_data, delimiter=",")
-            writer.writerow(tonight_partita)
-    else:
-        messagebox.showerror("Errore", "Tipo di file sconosciuto")
-
 def build_panel_classifica():
     frm_classifica = Frame(frame_panel, pady=30)
     lbl_classifica = Label(frm_classifica, text="Classifica", font=("TkDefaultFont", 19))
@@ -101,6 +75,9 @@ def build_panel_classifica():
     frm_classifica.pack(side="top")
 
 def build_panel_inserimento():
+    global list_cmb_pacchi
+    list_cmb_pacchi = []
+
     frm_inserimento = Frame(frame_panel, pady=30)
     lbl_input_pacchi = Label(frm_inserimento, text="Inserimento pacchi", font=("TkDefaultFont", 19))
     lbl_input_pacchi.grid(row=0, column=0)
@@ -112,6 +89,7 @@ def build_panel_inserimento():
             lbl_pacco = Label(frm_pacco, text=str(count))
 
             cmb_pacco = ttk.Combobox(frm_pacco, state="readonly", postcommand=update_available_pacchi) # postcommand: eseguito prima che si generi la lista di opzioni
+            cmb_pacco.bind("<<ComboboxSelected>>", lambda event, num_pacco=str(count): update_tonight_partita(event, num_pacco))
             cmb_pacco["values"] = POSSIBLE_PRIZES
             list_cmb_pacchi.append(cmb_pacco)
 
@@ -128,6 +106,8 @@ def build_panel_inserimento():
     global entry_vincita
     entry_vincita = Entry(frm_vincita)
     entry_vincita.grid(row=0, column=1)
+    btn_update_vincita = Button(frm_vincita, text="Conferma", command=lambda key="Vincita": update_tonight_partita(None, key))
+    btn_update_vincita.grid(row=0, column=2)
 
     frm_tipo_vincita = Frame(frm_inserimento)
     frm_tipo_vincita.grid(row=13, column=0)
@@ -135,12 +115,26 @@ def build_panel_inserimento():
     lbl_tipo_vincita.grid(row=0, column=0)
     global cmb_tipo_vincita
     cmb_tipo_vincita = ttk.Combobox(frm_tipo_vincita, values=["Regione fortunata", "Offerta", "Pacco"], state="readonly")
+    cmb_tipo_vincita.bind("<<ComboboxSelected>>", lambda event, key="Tipo vincita": update_tonight_partita(event, key))
     cmb_tipo_vincita.grid(row=0, column=1)
 
-    btn_confirm_pacchi = Button(frm_inserimento, text="Salva in Parquet e Google Sheets💾", command=(lambda: confirm_pacchi(entry_vincita.get(), cmb_tipo_vincita.get())))
-    btn_confirm_pacchi.grid(row=14, column=1, pady=10)
+    btn_confirm_pacchi = Button(frm_inserimento, text="Salva in Parquet e Google Sheets💾", command=confirm_pacchi)
+    btn_confirm_pacchi.grid(row=14, column=1, pady=5)
+    btn_inserisci_caricati = Button(frm_inserimento, text="Inserisci dati caricati", command=inserimento_loaded_data)
+    btn_inserisci_caricati.grid(row=15, column=1)
 
     frm_inserimento.pack(side="top")
+
+def update_tonight_partita(event, key):
+    if key != "Tipo vincita":
+        if key == "Vincita":
+            val = entry_vincita.get()
+        else:
+            val = event.widget.get()
+
+        tonight_partita[key] = pacco_to_float(val)
+    else:
+        tonight_partita[key] = event.widget.get()
 
 def update_available_pacchi():
     i = 0
@@ -159,17 +153,7 @@ def difference(l1, l2):
             tmp.append(element)
     return tmp
 
-def confirm_pacchi(vincita, tipo_vincita):
-    tonight_partita.clear()
-
-    tonight_partita.append(today_str)
-
-    for cmb_pacco in list_cmb_pacchi:
-        tonight_partita.append(pacco_to_float(cmb_pacco.get()))
-    
-    tonight_partita.append(float(vincita))
-    tonight_partita.append(tipo_vincita)
-
+def confirm_pacchi():
     if messagebox.showwarning("Salvare la partita?", str_warning_salvataggio) == "ok":
         # Aggiorna il dataframe
         df_partite_affari_tuoi.loc[len(df_partite_affari_tuoi)] = tonight_partita
@@ -190,6 +174,43 @@ def confirm_pacchi(vincita, tipo_vincita):
 def pacco_to_float(pacco: str):
     return float(pacco.replace(".", ""))
 
+def float_to_pacco(premio):
+    premio = float(premio)
+    return f"{premio:,.0f}".replace(",", ".")
+
+def load_partita_from_file(file_format):
+    global tonight_partita
+    if file_format == "csv":
+        with open("saved_partita.csv", "r") as csv_data:
+            reader = csv.reader(csv_data, delimiter=",")
+
+            for key, loaded_val in zip(tonight_partita.keys(), next(reader)):
+                tonight_partita[key] = loaded_val
+    else:
+        messagebox.showerror("Errore", "Tipo di file sconosciuto")
+
+def inserimento_loaded_data():
+    i = 0
+    for data in tonight_partita.values():
+        if i > 0 and i < 21:
+            list_cmb_pacchi[i-1].set(float_to_pacco(data)) # Aggiorna combobox pacchi
+        elif i == 21:
+            entry_vincita.delete(0, END) # Aggiorna entry vincita
+            entry_vincita.insert(0, data.split(".")[0])
+        elif i == 22:
+            cmb_tipo_vincita.set(data) # Aggiorna combobox tipo vincita
+        i += 1
+
+def save_partita_to_file(file_format):
+    if file_format == "csv":
+        with open("saved_partita.csv", "w", newline="") as csv_data:
+            writer = csv.writer(csv_data, delimiter=",")
+            writer.writerow(tonight_partita.values())
+    else:
+        messagebox.showerror("Errore", "Tipo di file sconosciuto")
+
+
+
 if __name__ == "__main__":
     today = date.today()
     today_str = today.strftime("%d/%m/%y")
@@ -197,7 +218,9 @@ if __name__ == "__main__":
     str_warning_salvataggio = f"La partita del {today_str} verrà salvata in locale e su Google Sheets."
 
     df_partite_affari_tuoi = pd.read_parquet("dataset_affari_tuoi.parquet")
-    tonight_partita = []
+    tonight_partita = {"Data": today_str, "1": 0.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 0.0, "6": 0.0, "7": 0.0, 
+                       "8": 0.0, "9": 0.0, "10": 0.0, "11": 0.0, "12": 0.0, "13": 0.0, "14": 0.0, "15": 0.0, "16": 0.0, 
+                       "17": 0.0, "18": 0.0, "19": 0.0,"20": 0.0, "Vincita": "", "Tipo vincita": ""}
     list_cmb_pacchi = []
 
     POSSIBLE_PRIZES = ["0", "1", "5", "10", "20", "50", "75", "100", "200", "500", "5.000", "10.000", "15.000", "20.000", "30.000", 

@@ -3,3 +3,4 @@ __pycache__/
 old/
 test/
 .DS_Store
+saved_partita.csv
