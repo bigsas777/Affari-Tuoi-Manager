@@ -1,5 +1,6 @@
 import csv
-from tkinter import END, Button, Entry, Frame, Label, PanedWindow, PhotoImage, Tk, messagebox, ttk
+from tkinter import END, Checkbutton, Entry, Frame, BooleanVar, Label, PanedWindow, PhotoImage, Tk, messagebox, ttk, Button
+from tkmacosx import Button as BtnMac
 import pandas as pd
 from datetime import date
 from google.oauth2.service_account import Credentials
@@ -75,8 +76,10 @@ def build_panel_classifica():
     frm_classifica.pack(side="top")
 
 def build_panel_inserimento():
-    global list_cmb_pacchi
+    global list_cmb_pacchi, chk_sheets, chk_parquet, val_chk_sheets, val_chk_parquet
     list_cmb_pacchi = []
+    val_chk_sheets = BooleanVar()
+    val_chk_parquet = BooleanVar()
 
     frm_inserimento = Frame(frame_panel, pady=30)
     lbl_input_pacchi = Label(frm_inserimento, text="Inserimento pacchi", font=("TkDefaultFont", 19))
@@ -118,10 +121,17 @@ def build_panel_inserimento():
     cmb_tipo_vincita.bind("<<ComboboxSelected>>", lambda event, key="Tipo vincita": update_tonight_partita(event, key))
     cmb_tipo_vincita.grid(row=0, column=1)
 
-    btn_confirm_pacchi = Button(frm_inserimento, text="Salva in Parquet e Google Sheets💾", command=confirm_pacchi)
-    btn_confirm_pacchi.grid(row=14, column=1, pady=5)
+    frm_salvataggio = Frame(frm_inserimento)
+    chk_sheets = Checkbutton(frm_salvataggio, text="Sheets", variable=val_chk_sheets, onvalue=True, offvalue=False)
+    chk_sheets.grid(row=0, column=0)
+    chk_parquet = Checkbutton(frm_salvataggio, text="Parquet", variable=val_chk_parquet, onvalue=True, offvalue=False)
+    chk_parquet.grid(row=0, column=1)
+    btn_salva_partita = BtnMac(frm_salvataggio, text="Salva partita💾", command=confirm_pacchi, foreground="white", background="#155CCC")
+    btn_salva_partita.grid(row=0, column=2)
+    frm_salvataggio.grid(row=14, column=1, pady=5)
+
     btn_inserisci_caricati = Button(frm_inserimento, text="Inserisci dati caricati", command=inserimento_loaded_data)
-    btn_inserisci_caricati.grid(row=15, column=1)
+    btn_inserisci_caricati.grid(row=0, column=1)
 
     frm_inserimento.pack(side="top")
 
@@ -158,18 +168,22 @@ def confirm_pacchi():
         # Aggiorna il dataframe
         df_partite_affari_tuoi.loc[len(df_partite_affari_tuoi)] = tonight_partita
         
-        try: # Salvataggio in locale
-            df_partite_affari_tuoi.to_parquet("dataset_affari_tuoi.parquet")
-        except:
-            messagebox.showerror("Errore", "Errore nel salvataggio in Parquet.")
+        if val_chk_parquet.get():
+            try: # Salvataggio in locale
+                df_partite_affari_tuoi.to_parquet("dataset_affari_tuoi.parquet")
+            except Exception as e:
+                print(e)
+                messagebox.showerror("Errore", f"Errore nel salvataggio in Parquet.\n {e}")
 
         
-        index_tonight_partita = df_partite_affari_tuoi.shape[0] + 1
+        index_tonight_partita = len(df_partite_affari_tuoi)
 
-        try: # Salvataggio in cloud (Google Sheets)
-            sheet.update(range_name=f"A{index_tonight_partita}:W{index_tonight_partita}", values=[tonight_partita])
-        except:
-            messagebox.showerror("Errore", "Errore nell'invio dei dati a Google Sheets")
+        if val_chk_sheets.get():
+            try: # Salvataggio in cloud (Google Sheets)
+                sheet.update(range_name=f"A{index_tonight_partita}:W{index_tonight_partita}", values=[list(tonight_partita.values())])
+            except Exception as e:
+                print(e)
+                messagebox.showerror("Errore", f"Errore nell'invio dei dati a Google Sheets.\n {e}")
 
 def pacco_to_float(pacco: str):
     return float(pacco.replace(".", ""))
@@ -185,18 +199,20 @@ def load_partita_from_file(file_format):
             reader = csv.reader(csv_data, delimiter=",")
 
             for key, loaded_val in zip(tonight_partita.keys(), next(reader)):
-                tonight_partita[key] = loaded_val
+                if key == "Tipo vincita" or key == "Data":
+                    tonight_partita[key] = loaded_val
+                else:
+                    tonight_partita[key] = float(loaded_val)
     else:
         messagebox.showerror("Errore", "Tipo di file sconosciuto")
 
 def inserimento_loaded_data():
-    i = 0
-    for data in tonight_partita.values():
+    for i, data in enumerate(tonight_partita.values()):
         if i > 0 and i < 21:
             list_cmb_pacchi[i-1].set(float_to_pacco(data)) # Aggiorna combobox pacchi
         elif i == 21:
             entry_vincita.delete(0, END) # Aggiorna entry vincita
-            entry_vincita.insert(0, data.split(".")[0])
+            entry_vincita.insert(0, str(data))
         elif i == 22:
             cmb_tipo_vincita.set(data) # Aggiorna combobox tipo vincita
         i += 1
@@ -213,18 +229,19 @@ def save_partita_to_file(file_format):
 
 if __name__ == "__main__":
     today = date.today()
-    today_str = today.strftime("%d/%m/%y")
+    today_str = today.strftime("%d/%m/%Y")
 
-    str_warning_salvataggio = f"La partita del {today_str} verrà salvata in locale e su Google Sheets."
+    str_warning_salvataggio = f"La partita del {today_str} verrà salvata in locale e/o su Google Sheets."
 
     df_partite_affari_tuoi = pd.read_parquet("dataset_affari_tuoi.parquet")
     tonight_partita = {"Data": today_str, "1": 0.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 0.0, "6": 0.0, "7": 0.0, 
                        "8": 0.0, "9": 0.0, "10": 0.0, "11": 0.0, "12": 0.0, "13": 0.0, "14": 0.0, "15": 0.0, "16": 0.0, 
                        "17": 0.0, "18": 0.0, "19": 0.0,"20": 0.0, "Vincita": "", "Tipo vincita": ""}
     list_cmb_pacchi = []
-
     POSSIBLE_PRIZES = ["0", "1", "5", "10", "20", "50", "75", "100", "200", "500", "5.000", "10.000", "15.000", "20.000", "30.000", 
                         "50.000", "75.000", "100.000", "200.000", "300.000"]
+    val_chk_sheets = None
+    val_chk_parquet = None
 
     # Spreadsheets API config
     scopes = [
