@@ -20,9 +20,11 @@ def main():
     btn_inserimento.pack(side="left")
     paned_buttons.add(btn_inserimento)
 
+    '''
     btn_classifica = Button(paned_buttons, text="Classifica📊", command=(lambda: build_panel("clas")))
     btn_classifica.pack(side="left")
     paned_buttons.add(btn_classifica)
+    '''
 
     btn_impostazioni = Button(paned_buttons, text="Impostazioni⚙️", command=(lambda: build_panel("imp")))
     btn_impostazioni.pack(side="left")
@@ -44,8 +46,8 @@ def build_panel(panel_id):
 
     if panel_id == "ins":
         build_panel_inserimento()
-    elif panel_id == "clas" :
-        build_panel_classifica()
+    #elif panel_id == "clas" :
+        #build_panel_classifica()
     elif panel_id == "imp":
         build_panel_impostazioni()
     else:
@@ -68,12 +70,14 @@ def build_panel_impostazioni():
 
     frm_impostazioni.pack(side="top")
 
+'''
 def build_panel_classifica():
     frm_classifica = Frame(frame_panel, pady=30)
     lbl_classifica = Label(frm_classifica, text="Classifica", font=("TkDefaultFont", 19))
     lbl_classifica.grid(row=0, column=0)
 
     frm_classifica.pack(side="top")
+'''
 
 def build_panel_inserimento():
     global list_cmb_pacchi, chk_sheets, chk_parquet, val_chk_sheets, val_chk_parquet
@@ -130,10 +134,9 @@ def build_panel_inserimento():
     btn_salva_partita.grid(row=0, column=2)
     frm_salvataggio.grid(row=14, column=1, pady=5)
 
-    btn_inserisci_caricati = Button(frm_inserimento, text="Inserisci dati caricati", command=inserimento_loaded_data)
-    btn_inserisci_caricati.grid(row=0, column=1)
-
     frm_inserimento.pack(side="top")
+
+    inserimento_loaded_data() # Ripristina i valori delle Combobox se viene cambiata la schermata
 
 def update_tonight_partita(event, key):
     if key != "Tipo vincita":
@@ -145,6 +148,8 @@ def update_tonight_partita(event, key):
         tonight_partita[key] = pacco_to_float(val)
     else:
         tonight_partita[key] = event.widget.get()
+    
+    maschera_tonight_modified[key] = True
 
 def update_available_pacchi():
     i = 0
@@ -176,7 +181,7 @@ def confirm_pacchi():
                 messagebox.showerror("Errore", f"Errore nel salvataggio in Parquet.\n {e}")
 
         
-        index_tonight_partita = len(df_partite_affari_tuoi)
+        index_tonight_partita = len(df_partite_affari_tuoi) # Dove verrà aggiunta la partita (Spoiler: in fondo)
 
         if val_chk_sheets.get():
             try: # Salvataggio in cloud (Google Sheets)
@@ -193,8 +198,9 @@ def float_to_pacco(premio):
     return f"{premio:,.0f}".replace(",", ".")
 
 def load_partita_from_file(file_format):
-    global tonight_partita
-    if file_format == "csv":
+    global tonight_partita, maschera_tonight_modified
+
+    if file_format == "csv": # Per future implementazioni di altri formati
         with open("saved_partita.csv", "r") as csv_data:
             reader = csv.reader(csv_data, delimiter=",")
 
@@ -203,22 +209,28 @@ def load_partita_from_file(file_format):
                     tonight_partita[key] = loaded_val
                 else:
                     tonight_partita[key] = float(loaded_val)
+        
+        for key in maschera_tonight_modified:
+            maschera_tonight_modified[key] = True
     else:
         messagebox.showerror("Errore", "Tipo di file sconosciuto")
 
 def inserimento_loaded_data():
+    list_maschera = list(maschera_tonight_modified.values())
+
     for i, data in enumerate(tonight_partita.values()):
-        if i > 0 and i < 21:
-            list_cmb_pacchi[i-1].set(float_to_pacco(data)) # Aggiorna combobox pacchi
-        elif i == 21:
-            entry_vincita.delete(0, END) # Aggiorna entry vincita
-            entry_vincita.insert(0, str(data))
-        elif i == 22:
-            cmb_tipo_vincita.set(data) # Aggiorna combobox tipo vincita
-        i += 1
+        if list_maschera[i]:
+            if i > 0 and i < 21:
+                list_cmb_pacchi[i-1].set(float_to_pacco(data)) # Aggiorna combobox pacchi
+            elif i == 21:
+                entry_vincita.delete(0, END) # Aggiorna entry vincita
+                entry_vincita.insert(0, str(data))
+            elif i == 22:
+                cmb_tipo_vincita.set(data) # Aggiorna combobox tipo vincita
+            i += 1
 
 def save_partita_to_file(file_format):
-    if file_format == "csv":
+    if file_format == "csv": # Per future implementazioni di altri formati
         with open("saved_partita.csv", "w", newline="") as csv_data:
             writer = csv.writer(csv_data, delimiter=",")
             writer.writerow(tonight_partita.values())
@@ -226,31 +238,44 @@ def save_partita_to_file(file_format):
         messagebox.showerror("Errore", "Tipo di file sconosciuto")
 
 
-
+# --- ENTRY POINT ---
 if __name__ == "__main__":
     today = date.today()
     today_str = today.strftime("%d/%m/%Y")
 
     str_warning_salvataggio = f"La partita del {today_str} verrà salvata in locale e/o su Google Sheets."
 
+    # Dataset contenente tutte le partite dal 12/02/24 ad oggi
     df_partite_affari_tuoi = pd.read_parquet("dataset_affari_tuoi.parquet")
+
+    # Struttura dati che memorizza la partita su cui si sta lavorando
     tonight_partita = {"Data": today_str, "1": 0.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 0.0, "6": 0.0, "7": 0.0, 
                        "8": 0.0, "9": 0.0, "10": 0.0, "11": 0.0, "12": 0.0, "13": 0.0, "14": 0.0, "15": 0.0, "16": 0.0, 
                        "17": 0.0, "18": 0.0, "19": 0.0,"20": 0.0, "Vincita": "", "Tipo vincita": ""}
-    list_cmb_pacchi = []
+    
+    # Maschera booleana per riconoscere quale widget del frm_inserimento è stato modificato
+    maschera_tonight_modified = {"Data": False, "1": False, "2": False, "3": False, "4": False, "5": False, 
+                                 "6": False, "7": False, "8": False, "9": False, "10": False, "11": False, 
+                                 "12": False, "13": False, "14": False, "15": False, "16": False, "17": False, 
+                                 "18": False, "19": False, "20": False, "Vincita": False, "Tipo vincita": False}
+    
+    list_cmb_pacchi = [] # Conserva tutte le Combobox dei pacchi
     POSSIBLE_PRIZES = ["0", "1", "5", "10", "20", "50", "75", "100", "200", "500", "5.000", "10.000", "15.000", "20.000", "30.000", 
                         "50.000", "75.000", "100.000", "200.000", "300.000"]
-    val_chk_sheets = None
-    val_chk_parquet = None
+    val_chk_sheets = None # Valore associato al Checkbutton per il salvataggio in Google Sheets
+    val_chk_parquet = None # Valore associato al Checkbutton per il salvataggio in Parquet
 
-    # Spreadsheets API config
+    # Google Sheets API config
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets"
     ]
-    creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
-    client = gspread.authorize(creds)
-    workbook = client.open_by_key("1kaKvRk6R95m9XySwtx_GQvxY2v3QQpTwTnWHPQveed8")
-    sheet = workbook.worksheet("Dati")
+    try:
+        creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
+        client = gspread.authorize(creds)
+        workbook = client.open_by_key("1kaKvRk6R95m9XySwtx_GQvxY2v3QQpTwTnWHPQveed8")
+        sheet = workbook.worksheet("Dati")
+    except Exception as e:
+        messagebox.showerror("Errore", f"Errore Google Sheets\n{e}")
 
     # Public widgets
     root = Tk()
