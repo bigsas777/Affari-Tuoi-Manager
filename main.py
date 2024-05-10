@@ -275,6 +275,7 @@ if __name__ == "__main__":
         workbook = client.open_by_key("1kaKvRk6R95m9XySwtx_GQvxY2v3QQpTwTnWHPQveed8")
         sheet = workbook.worksheet("Dati")
     except Exception as e:
+        print(e)
         messagebox.showerror("Errore", f"Errore Google Sheets\n{e}")
 
     # Public widgets
