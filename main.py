@@ -1,5 +1,6 @@
 import csv
 from tkinter import END, Checkbutton, Entry, Frame, BooleanVar, Label, PanedWindow, PhotoImage, Tk, messagebox, ttk, Button
+from tkcalendar import DateEntry
 from tkmacosx import Button as BtnMac
 import pandas as pd
 from datetime import date
@@ -89,6 +90,11 @@ def build_panel_inserimento():
     lbl_input_pacchi = Label(frm_inserimento, text="Inserimento pacchi", font=("TkDefaultFont", 19))
     lbl_input_pacchi.grid(row=0, column=0)
 
+    global entry_data
+    entry_data = DateEntry(frm_inserimento)
+    entry_data.bind("<<DateEntrySelected>>", update_data)
+    entry_data.grid(row=0, column=1)
+
     count = 1
     for i in range(2):
         for j in range(10):
@@ -111,7 +117,7 @@ def build_panel_inserimento():
     lbl_vincita = Label(frm_vincita, text="Vincita")
     lbl_vincita.grid(row=0, column=0)
     global entry_vincita
-    entry_vincita = Entry(frm_vincita)
+    entry_vincita = Entry(frm_vincita, width=13)
     entry_vincita.grid(row=0, column=1)
     btn_update_vincita = Button(frm_vincita, text="Conferma", command=lambda key="Vincita": update_tonight_partita(None, key))
     btn_update_vincita.grid(row=0, column=2)
@@ -137,6 +143,13 @@ def build_panel_inserimento():
     frm_inserimento.pack(side="top")
 
     inserimento_loaded_data() # Ripristina i valori delle Combobox se viene cambiata la schermata
+
+def update_data(event):
+    global selected_date, selected_date_str
+    selected_date = event.widget.get_date()
+    selected_date_str = selected_date.strftime("%d/%m/%Y")
+    tonight_partita["Data"] = selected_date_str
+    maschera_tonight_modified["Data"] = True
 
 def update_tonight_partita(event, key):
     if key != "Tipo vincita":
@@ -172,6 +185,9 @@ def confirm_pacchi():
     if messagebox.showwarning("Salvare la partita?", str_warning_salvataggio) == "ok":
         # Aggiorna il dataframe
         df_partite_affari_tuoi.loc[len(df_partite_affari_tuoi)] = tonight_partita
+        df_partite_affari_tuoi["Data"] = pd.to_datetime(df_partite_affari_tuoi["Data"], format="%d/%m/%Y")
+        df_partite_affari_tuoi.sort_values(by=["Data"], inplace=True) # Ordina per data
+        df_partite_affari_tuoi["Data"] = df_partite_affari_tuoi["Data"].map(lambda x: x.strftime("%d/%m/%Y"))
         
         if val_chk_parquet.get():
             try: # Salvataggio in locale
@@ -220,7 +236,9 @@ def inserimento_loaded_data():
 
     for i, data in enumerate(tonight_partita.values()):
         if list_maschera[i]:
-            if i > 0 and i < 21:
+            if i == 0:
+                entry_data.set_date(selected_date) # Aggiorna la data selezionata
+            elif i > 0 and i < 21:
                 list_cmb_pacchi[i-1].set(float_to_pacco(data)) # Aggiorna combobox pacchi
             elif i == 21:
                 entry_vincita.delete(0, END) # Aggiorna entry vincita
@@ -242,8 +260,10 @@ def save_partita_to_file(file_format):
 if __name__ == "__main__":
     today = date.today()
     today_str = today.strftime("%d/%m/%Y")
+    selected_date = today
+    selected_date_str = selected_date.strftime("%d/%m/%Y")
 
-    str_warning_salvataggio = f"La partita del {today_str} verrà salvata in locale e/o su Google Sheets."
+    str_warning_salvataggio = f"La partita verrà salvata in locale e/o su Google Sheets."
 
     # Dataset contenente tutte le partite dal 12/02/24 ad oggi
     df_partite_affari_tuoi = pd.read_parquet("dataset_affari_tuoi.parquet")
@@ -283,5 +303,6 @@ if __name__ == "__main__":
     frame_panel = Frame(root)
     entry_vincita = None
     cmb_tipo_vincita = None
+    entry_data = None
 
     main()
